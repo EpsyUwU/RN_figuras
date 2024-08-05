@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Shape Detection</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.min.js"></script>
+    <style>
+        #videoContainer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #video {
+            width: 640px;
+            height: 480px;
+            border: 1px solid black;
+        }
+        #canvas {
+            display: none; /* Hide canvas element */
+        }
+        #prediction {
+            font-size: 24px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="videoContainer">
+        <h1>Real-Time Shape Detection</h1>
+        <video id="video" autoplay></video>
+        <canvas id="canvas"></canvas>
+        <h2 id="prediction">Prediction: None</h2>
+    </div>
+
+    <script>
+        const socket = io();
+
+        async function startCamera() {
+            try {
+                // Get user's media devices
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const backCamera = devices.find(device => device.kind === 'videoinput' && device.label.toLowerCase().includes('back'));
+
+                // Get media stream from the back camera
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { deviceId: backCamera ? { exact: backCamera.deviceId } : undefined }
+                });
+
+                // Get video element
+                const video = document.getElementById('video');
+                video.srcObject = stream;
+
+                // Function to capture frames and send them to the server
+                function processVideo() {
+                    const canvas = document.getElementById('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const frameData = canvas.toDataURL('image/jpeg');
+                    socket.emit('frame', frameData);
+
+                    // Request next frame
+                    requestAnimationFrame(processVideo);
+                }
+
+                // Start processing video frames
+                processVideo();
+            } catch (err) {
+                console.error('Error accessing camera: ', err);
+            }
+        }
+
+        // Handle incoming predictions from the server
+        socket.on('prediction', function(prediction) {
+            document.getElementById('prediction').innerText = 'Prediction: ' + prediction;
+        });
+
+        window.onload = startCamera;
+    </script>
+</body>
+</html>
+
